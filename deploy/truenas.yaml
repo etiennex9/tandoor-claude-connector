@@ -1,0 +1,46 @@
+# Tandoor ↔ Claude gateway on TrueNAS: Apps → Discover Apps → ⋮ → Install via YAML, app name "tandoor-claude".
+#
+# Before pasting, replace:
+#   - recipe.example.com and login.example.com with your Tandoor and Authentik hosts (twice for recipe.example.com).
+#   - every CHANGE_ME_... (README → Setup says where each comes from). JWT_SIGNING_KEY: openssl rand -hex 32.
+#   - POOL in the host path, and create it first: its own dataset with the Generic preset (POSIX permissions), owned by
+#     1000:1000 (the image's node user), mode 700. It holds Claude's client registrations and the encrypted Authentik
+#     refresh tokens.
+#   - 30181, if that port is taken. Point nginx's two gateway locations (nginx/claude-gateway.conf) at
+#     http://<NAS address>:30181.
+#
+# Unlike the docker compose setup, which binds to 127.0.0.1, this port is reachable from the whole LAN. Every endpoint
+# still requires OAuth, but nginx's optional Anthropic-only limit on /claude/mcp holds only if nothing else can reach the
+# port: firewall it, or bind it to an address only nginx can reach ("<address>:30181:8000").
+#
+# The image comes from the GitHub Container Registry, published by .github/workflows/publish.yml on pushes to main. Its
+# package must be public (a one-time switch after the first push, see README → Deploy).
+# The tool lists are built into the image (gateway/server.py); TANDOOR_MCP_INCLUDE_ONLY / TANDOOR_MCP_EXCLUDE override them.
+
+services:
+  gateway:
+    image: ghcr.io/etiennex9/tandoor-claude-gateway:latest
+    environment:
+      PUBLIC_BASE_URL: https://recipe.example.com/claude
+      OIDC_CONFIG_URL: https://login.example.com/application/o/claude-tandoor/.well-known/openid-configuration
+      OIDC_CLIENT_ID: CHANGE_ME_CLIENT_ID
+      OIDC_CLIENT_SECRET: CHANGE_ME_CLIENT_SECRET
+      JWT_SIGNING_KEY: CHANGE_ME_SIGNING_KEY
+      # Optional: comma-separated Authentik emails or usernames. Empty = trust Authentik's policy binding.
+      ALLOWED_USERS: ""
+      TANDOOR_URL: https://recipe.example.com
+      TANDOOR_TOKEN: CHANGE_ME_TANDOOR_TOKEN
+    ports:
+      - "30181:8000"
+    volumes:
+      - type: bind
+        source: /mnt/POOL/apps/tandoor-claude/data
+        target: /data
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped

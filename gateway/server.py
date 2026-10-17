@@ -80,14 +80,52 @@ class AuthentikProxy(OIDCProxy):
         )
 
 
+# Curated read-write tool set (see README). TANDOOR_MCP_INCLUDE_ONLY overrides it.
+DEFAULT_INCLUDE_ONLY = (
+    "get_version", "search_recipes", "list_recipes", "list_recipes_flat", "get_recipe", "related_recipes",
+    "list_foods", "get_food", "list_ingredients", "parse_ingredient", "list_keywords", "get_keyword",
+    "list_meal_plans", "get_meal_plan", "list_meal_types", "list_shopping_entries", "get_shopping_entry",
+    "list_cook_logs", "list_units",
+    "update_food", "food_batch_update", "create_food", "food_shopping_update",
+    "create_shopping_entry", "update_shopping_entry", "delete_shopping_entry",
+    "bulk_check_shopping_entries", "add_recipe_to_shopping_list",
+    "create_meal_plan", "update_meal_plan", "delete_meal_plan",
+    "import_recipe_from_url", "create_cook_log",
+)
+
+# Second layer in case the allowlist is ever widened with globs. TANDOOR_MCP_EXCLUDE overrides it.
+DEFAULT_EXCLUDE = (
+    "delete_recipe*", "delete_food", "merge_*", "*access_token*", "*invite_link*", "authenticate",
+    "*space*", "*user*", "enable_tool_group", "disable_tool_group", "list_tool_groups",
+)
+
+
+def is_blank(value: str | None) -> bool:
+    """True when tandoor-recipes-mcp would read the value as an empty list.
+
+    It splits on commas and drops items that are empty after a JavaScript
+    trim(), so "", "  " and " , " all mean "no filter", and an empty include
+    list exposes every tool. trim() also strips U+FEFF, which str.strip() keeps.
+    """
+    return not any(item.replace("﻿", "").strip() for item in (value or "").split(","))
+
+
 def tandoor_env() -> dict[str, str]:
     """Only TANDOOR_* settings reach the child; gateway secrets stay here."""
     require_env("TANDOOR_URL")
     require_env("TANDOOR_TOKEN")
     env = {k: v for k, v in os.environ.items() if k.startswith("TANDOOR_")}
     env["TANDOOR_MCP_TRANSPORT"] = "stdio"
-    # All groups registered at boot; TANDOOR_MCP_INCLUDE_ONLY decides what is exposed.
-    env.setdefault("TANDOOR_MCP_PROFILE", "full")
+    defaults = {
+        # All groups registered at boot; TANDOOR_MCP_INCLUDE_ONLY decides what is exposed.
+        # A blank profile would fall back to "core", which has no write tools.
+        "TANDOOR_MCP_PROFILE": "full",
+        "TANDOOR_MCP_INCLUDE_ONLY": ", ".join(DEFAULT_INCLUDE_ONLY),
+        "TANDOOR_MCP_EXCLUDE": ", ".join(DEFAULT_EXCLUDE),
+    }
+    for key, default in defaults.items():
+        if is_blank(env.get(key)):
+            env[key] = default
     return env
 
 

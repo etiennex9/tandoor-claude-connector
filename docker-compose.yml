@@ -17,21 +17,9 @@ services:
       # Passed through to the tandoor-recipes-mcp child process.
       TANDOOR_URL: ${TANDOOR_URL}
       TANDOOR_TOKEN: ${TANDOOR_TOKEN}
-      # Curated read-write tool set (see README).
-      TANDOOR_MCP_INCLUDE_ONLY: >-
-        get_version, search_recipes, list_recipes, list_recipes_flat, get_recipe, related_recipes,
-        list_foods, get_food, list_ingredients, parse_ingredient, list_keywords, get_keyword,
-        list_meal_plans, get_meal_plan, list_meal_types, list_shopping_entries, get_shopping_entry,
-        list_cook_logs, list_units,
-        update_food, food_batch_update, create_food, food_shopping_update,
-        create_shopping_entry, update_shopping_entry, delete_shopping_entry,
-        bulk_check_shopping_entries, add_recipe_to_shopping_list,
-        create_meal_plan, update_meal_plan, delete_meal_plan,
-        import_recipe_from_url, create_cook_log
-      # Second layer in case the allowlist is ever widened with globs.
-      TANDOOR_MCP_EXCLUDE: >-
-        delete_recipe*, delete_food, merge_*, *access_token*, *invite_link*, authenticate,
-        *space*, *user*, enable_tool_group, disable_tool_group, list_tool_groups
+      # Tool lists: empty means the curated defaults in gateway/server.py (see README).
+      TANDOOR_MCP_INCLUDE_ONLY: ${TANDOOR_MCP_INCLUDE_ONLY:-}
+      TANDOOR_MCP_EXCLUDE: ${TANDOOR_MCP_EXCLUDE:-}
     volumes:
       # OAuth client registrations and encrypted upstream tokens.
       - gateway-data:/data
