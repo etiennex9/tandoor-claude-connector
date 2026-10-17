@@ -52,7 +52,7 @@ The token works no matter how you log in to Tandoor (SSO or password).
 The discovery URL is `https://login.example.com/application/o/claude-tandoor/.well-known/openid-configuration`.
 
 ### 3. Deploy on TrueNAS
-The image must already be published and public: see the one-time step under [Deploy](#deploy). Moving an existing docker compose setup? Follow [Moving from docker compose to TrueNAS](#moving-from-docker-compose-to-truenas) instead, so Claude stays connected.
+The image is public on GHCR, so TrueNAS pulls it without a login (see [Deploy](#deploy)). Moving an existing docker compose setup? Follow [Moving from docker compose to TrueNAS](#moving-from-docker-compose-to-truenas) instead, so Claude stays connected.
 
 1. Create the data dataset, `/mnt/POOL/apps/tandoor-claude/data`, with the **Generic** preset (POSIX permissions), owned by `1000:1000`, mode `700`.
 2. Generate the signing key:
@@ -179,7 +179,7 @@ On every push to `main` that changes more than Markdown files, [the publish work
 
 To roll out a new image, open **Apps** in TrueNAS and update the `tandoor-claude` app. It runs `latest`.
 
-**One-time step:** a new GHCR package starts private, even for a public repository. After the first successful run, open the package from the repository's **Packages** list, then go to **Package settings → Change visibility → Public**, so TrueNAS can pull the image without a login.
+The package is public, like the repository, so TrueNAS pulls it without a login. If a pull is ever denied, open the package from the repository's **Packages** list and check **Package settings → Change visibility**.
 
 ## Maintenance
 

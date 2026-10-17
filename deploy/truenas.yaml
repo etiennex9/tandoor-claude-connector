@@ -14,7 +14,7 @@
 # port: firewall it, or bind it to an address only nginx can reach ("<address>:30181:8000").
 #
 # The image comes from the GitHub Container Registry, published by .github/workflows/publish.yml on pushes to main. Its
-# package must be public (a one-time switch after the first push, see README → Deploy).
+# package is public, so no registry login is needed.
 # The tool lists are built into the image (gateway/server.py); TANDOOR_MCP_INCLUDE_ONLY / TANDOOR_MCP_EXCLUDE override them.
 
 services:
