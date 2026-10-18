@@ -54,7 +54,7 @@ The discovery URL is `https://login.example.com/application/o/claude-tandoor/.we
 ### 3. Deploy on TrueNAS
 The image is public on GHCR, so TrueNAS pulls it without a login (see [Deploy](#deploy)). Moving an existing docker compose setup? Follow [Moving from docker compose to TrueNAS](#moving-from-docker-compose-to-truenas) instead, so Claude stays connected.
 
-1. Create the data dataset, `/mnt/POOL/apps/tandoor-claude/data`, with the **Generic** preset (POSIX permissions), owned by `1000:1000`, mode `700`.
+1. Create the data dataset, `/mnt/POOL/apps/tandoor-claude/data`, with the **Generic** preset, and leave its owner as is. On start, the container gives it to `1000:1000` (the image's `node` user), which TrueNAS has no user for, then runs the gateway as that user. Other presets work too, but their ACL entries (such as the Apps preset's `apps` user) also reach the stored tokens.
 2. Generate the signing key:
    ```bash
    openssl rand -hex 32
@@ -66,7 +66,7 @@ The image is public on GHCR, so TrueNAS pulls it without a login (see [Deploy](#
    - Optionally, the allowed Authentik emails in `ALLOWED_USERS`.
    - `POOL`, and the port if `30181` is taken.
 4. In TrueNAS, go to **Apps → Discover Apps → ⋮ → Install via YAML**, name the app `tandoor-claude`, and paste the YAML.
-5. Check the app's logs. They should show `tandoor-recipes-mcp@2.0.1 ... tandoor=2.x` on the first request.
+5. Check the app's logs. The first start shows `Giving /data to node (uid 1000)`, and they should show `tandoor-recipes-mcp@2.0.1 ... tandoor=2.x` on the first request. If the app stops right away instead, its last log line says which path the gateway can't use and why.
 
 **Or with docker compose** on the nginx host. This builds the image locally and listens on `127.0.0.1:8737`:
 ```bash
@@ -91,21 +91,17 @@ This copies the gateway's data, so Claude stays connected. The stored data is ke
    ```bash
    docker run --rm -v tandoor-claude_gateway-data:/data -v "$HOME:/out" alpine tar -czf /out/gateway-data.tgz -C /data .
    ```
-4. Copy `~/gateway-data.tgz` to the NAS. There, as root, extract it into the dataset:
+4. Copy `~/gateway-data.tgz` to the NAS. There, as root, extract it into the dataset. The container gives the files to `1000:1000` when it starts:
    ```bash
    tar -xzf gateway-data.tgz -C /mnt/POOL/apps/tandoor-claude/data
    ```
-5. Restore the ownership and mode:
-   ```bash
-   chown -R 1000:1000 /mnt/POOL/apps/tandoor-claude/data && chmod 700 /mnt/POOL/apps/tandoor-claude/data
-   ```
-6. Fill in the YAML as in step 3.3, but with the values from your `.env`: the **same** `JWT_SIGNING_KEY`, OIDC client and `PUBLIC_BASE_URL`. Then install the app (step 3.4).
-7. Repoint nginx ([Setup step 4](#4-nginx)), then run the [Checks](#checks).
-8. Remove the old stack and its volume:
+5. Fill in the YAML as in step 3.3, but with the values from your `.env`: the **same** `JWT_SIGNING_KEY`, OIDC client and `PUBLIC_BASE_URL`. Then install the app (step 3.4).
+6. Repoint nginx ([Setup step 4](#4-nginx)), then run the [Checks](#checks).
+7. Remove the old stack and its volume:
    ```bash
    docker compose down -v
    ```
-9. Delete `gateway-data.tgz` on both hosts.
+8. Delete `gateway-data.tgz` on both hosts.
 
 Or skip the copy, install fresh, and reconnect the connector in Claude once.
 
@@ -188,7 +184,7 @@ The package is public, like the repository, so TrueNAS pulls it without a login.
 - **Upgrade:** bump `fastmcp` in `gateway/requirements.txt` or the `tandoor-recipes-mcp` version in `gateway/Dockerfile`, push to `main`, then update the app in TrueNAS. With compose, run `docker compose up -d --build`.
 - **Unit tests** run in the publish workflow. To run them locally against an image built with `docker compose build`:
   ```bash
-  docker run --rm --user root -e PYTHONPATH=/src -v "$PWD/gateway:/src" -w /src tandoor-claude-gateway sh -c "pip install -q pytest && python -m pytest -q tests"
+  docker run --rm -e PYTHONPATH=/src -v "$PWD/gateway:/src" -w /src tandoor-claude-gateway sh -c "pip install -q pytest && python -m pytest -q tests"
   ```
 
 ## Notes

@@ -3,9 +3,9 @@
 # Before pasting, replace:
 #   - recipe.example.com and login.example.com with your Tandoor and Authentik hosts (twice for recipe.example.com).
 #   - every CHANGE_ME_... (README → Setup says where each comes from). JWT_SIGNING_KEY: openssl rand -hex 32.
-#   - POOL in the host path, and create it first: its own dataset with the Generic preset (POSIX permissions), owned by
-#     1000:1000 (the image's node user), mode 700. It holds Claude's client registrations and the encrypted Authentik
-#     refresh tokens.
+#   - POOL in the host path, and create it first: its own dataset with the Generic preset, owner left as is. On start,
+#     the container gives it to uid 1000 (the image's node user) and runs the gateway as that user. It holds Claude's
+#     client registrations and the encrypted Authentik refresh tokens.
 #   - 30181, if that port is taken. Point nginx's two gateway locations (nginx/claude-gateway.conf) at
 #     http://<NAS address>:30181.
 #
