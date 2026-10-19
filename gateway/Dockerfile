@@ -16,7 +16,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN python3 -m venv /opt/venv && pip install --no-cache-dir -r requirements.txt
 
-COPY server.py entrypoint.sh ./
+COPY server.py photo_import.py entrypoint.sh ./
 RUN chmod 755 entrypoint.sh && mkdir -p /data && chown node:node /data
 USER node
 

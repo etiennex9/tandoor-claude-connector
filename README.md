@@ -8,7 +8,7 @@ Claude app ─▶ Anthropic cloud ─HTTPS─▶ nginx  recipe.example.com
                                          └─ everything else                   ─▶ Tandoor (unchanged)
 
 gateway container
- ├─ FastMCP gateway (Python): OAuth for Claude, sign-in delegated to Authentik
+ ├─ FastMCP gateway (Python): OAuth for Claude, sign-in delegated to Authentik, recipe photo uploads
  └─ tandoor-recipes-mcp (Node, stdio child) ── Bearer <Tandoor API token> ─▶ Tandoor API
 ```
 
@@ -117,6 +117,8 @@ sudo nginx -t
 ```bash
 sudo systemctl reload nginx
 ```
+The `/claude/` block also raises nginx's request size limit to 11 MB, for [recipe photos](#recipes-from-photos). If you copied it before, add its `client_max_body_size` line.
+
 That file also has an optional block that limits `/claude/mcp` to Anthropic's IP range. On TrueNAS, the app's port is reachable from the whole LAN, which bypasses nginx, so that limit holds only if you firewall the port or bind it to an address only nginx can reach (`"<address>:30181:8000"` in the YAML). Every endpoint still requires OAuth either way.
 
 ### 5. Claude
@@ -132,6 +134,7 @@ Things to try:
 - "What's on hand?"
 - "What can I make tonight with what's on hand?"
 - "Add milk to the shopping list."
+- Share a photo, screenshot or PDF of a recipe: "Add this to Tandoor, with the photo as its image." Or start from the connector's `import_recipe_from_photo` prompt in the **+** menu.
 - "Import https://… and plan it for Friday dinner."
 
 ## Checks
@@ -151,6 +154,11 @@ curl -s https://recipe.example.com/.well-known/oauth-authorization-server
 ```
 Should list `registration_endpoint` and `S256`.
 
+```bash
+curl -s https://recipe.example.com/claude/upload/test
+```
+Should return the gateway's "This link has expired or was already used" page, not Tandoor's.
+
 Tandoor itself (`https://recipe.example.com/`) should behave exactly as before.
 
 ## What Claude can do
@@ -164,6 +172,7 @@ The tool list is built into the image: `DEFAULT_INCLUDE_ONLY` in [gateway/server
 | Shopping list | create/update/delete entries, bulk check, add a recipe's ingredients |
 | Meal plan | create/update/delete entries |
 | Recipes | `import_recipe_from_url`, `create_cook_log` |
+| Recipe photos | `create_image_upload_link` (gateway-side): a one-time link for setting a recipe's image; the `import_recipe_from_photo` prompt |
 
 Not exposed:
 - Deleting or merging recipes or foods.
@@ -172,6 +181,18 @@ Not exposed:
 To change the default tool list, edit it, push to `main`, then update the app in TrueNAS (see [Deploy](#deploy)). With compose, run `docker compose up -d --build`.
 
 Tandoor stores "on hand" as a **yes/no flag per food**, with no quantities or fridge/pantry locations.
+
+### Recipes from photos
+
+Share a photo, screenshot or PDF of a recipe and ask Claude to add it. Claude reads it itself and creates the recipe with `create_recipe`, which takes foods, units and keywords by name and finds or creates them in Tandoor. Tandoor's AI import and AI provider aren't involved. The `import_recipe_from_photo` prompt tells Claude how to transcribe: keep amounts and units as written, put each ingredient in the step that uses it, and ask about anything illegible instead of guessing. `create_recipe` has no ingredient headers, so sections such as "For the sauce" become steps of their own, and an ingredient without an amount ("salt to taste") gets 0, with the rest in its note.
+
+Setting the photo as the recipe's image takes one more tap. A tool call can't carry a photo from the chat, and `upload_recipe_image` only takes a public URL, so the gateway adds its own tool, `create_image_upload_link`. Claude gets a link such as `https://recipe.example.com/claude/upload/<token>` and gives it to you. Open it on the device that has the photo and choose the photo; the gateway checks it and sets it as the recipe's image, replacing any image the recipe had.
+- Each link is for one recipe and one upload, and expires after 30 minutes. The gateway keeps links in memory, so a restart expires them too.
+- It takes a JPEG, PNG or WebP of up to 10 MB, checked by its content. iPhones convert HEIC photos to JPEG when you choose them.
+- The link itself is the credential: opening it needs no sign-in, so share it only with whoever should set the image.
+- If Claude can run code that reaches your host (code execution with network access in Claude's settings), it can upload the image itself, such as a crop of the dish. That depends on your Claude plan and settings, and hasn't been tried here.
+
+The tool and prompt are served by the gateway, not tandoor-recipes-mcp, so `TANDOOR_MCP_INCLUDE_ONLY` doesn't hide them.
 
 ## Deploy
 
