@@ -1,6 +1,6 @@
-# Tests the gateway, then builds its image when its inputs changed (see .github/scripts/image-changed.sh). On main, pushes
-# it to ghcr.io/<owner>/tandoor-claude-gateway, tagged latest and sha-<commit>. A manual run on another branch pushes only
-# sha-<commit>.
+# Tests the gateway, then builds its image when its inputs changed (see .github/scripts/image-changed.sh) and starts it
+# (.github/scripts/smoke-test.sh). On main, pushes it to ghcr.io/<owner>/tandoor-claude-gateway, tagged latest and
+# sha-<commit>. A manual run on another branch pushes only sha-<commit>.
 name: Publish
 
 on:
@@ -88,11 +88,25 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=short
-      - uses: docker/build-push-action@v7
+      - name: Build
+        uses: docker/build-push-action@v7
         with:
           context: gateway
-          push: ${{ env.PUSH == 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: tandoor-claude-gateway:smoke
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
+      # Starts the image as TrueNAS and compose run it, and with a root-owned /data, where it must stop with a message.
+      - name: Smoke test
+        run: bash .github/scripts/smoke-test.sh tandoor-claude-gateway:smoke
+      # The same build again, from the builder's cache.
+      - name: Push
+        if: env.PUSH == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: gateway
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=gateway
