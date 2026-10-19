@@ -54,7 +54,7 @@ The discovery URL is `https://login.example.com/application/o/claude-tandoor/.we
 ### 3. Deploy on TrueNAS
 The image is public on GHCR, so TrueNAS pulls it without a login (see [Deploy](#deploy)). Moving an existing docker compose setup? Follow [Moving from docker compose to TrueNAS](#moving-from-docker-compose-to-truenas) instead, so Claude stays connected.
 
-1. Create the data dataset, `/mnt/POOL/apps/tandoor-claude/data`, with the **Generic** preset (POSIX permissions), owned by `1000:1000`, mode `700`.
+1. Create the data dataset, `/mnt/POOL/apps/tandoor-claude/data`, with the **Generic** preset. Then give it to TrueNAS's built-in `apps` user and group (`568:568`), which the YAML runs the gateway as: on the dataset's **Permissions** card, click **Edit**, type `apps` in **User** and in **Group**, check **Apply User** and **Apply Group**, and save. If the dataset already holds files, also check **Apply permissions recursively**. If **Edit** opens the ACL Editor instead (the parent dataset has an ACL), set **Owner** and **Owner Group** to `apps` with **Apply Owner** and **Apply Group**.
 2. Generate the signing key:
    ```bash
    openssl rand -hex 32
@@ -66,7 +66,7 @@ The image is public on GHCR, so TrueNAS pulls it without a login (see [Deploy](#
    - Optionally, the allowed Authentik emails in `ALLOWED_USERS`.
    - `POOL`, and the port if `30181` is taken.
 4. In TrueNAS, go to **Apps → Discover Apps → ⋮ → Install via YAML**, name the app `tandoor-claude`, and paste the YAML.
-5. Check the app's logs. They should show `tandoor-recipes-mcp@2.0.1 ... tandoor=2.x` on the first request.
+5. Check the app's logs. They should show `tandoor-recipes-mcp@2.0.1 ... tandoor=2.x` on the first request. If the app stops right away instead, its last log line names the path `apps` can't use: redo step 1 with **Apply permissions recursively**.
 
 **Or with docker compose** on the nginx host. This builds the image locally and listens on `127.0.0.1:8737`:
 ```bash
@@ -95,9 +95,9 @@ This copies the gateway's data, so Claude stays connected. The stored data is ke
    ```bash
    tar -xzf gateway-data.tgz -C /mnt/POOL/apps/tandoor-claude/data
    ```
-5. Restore the ownership and mode:
+5. Give the files to `apps`. The compose volume's files belong to uid 1000, the image's own user:
    ```bash
-   chown -R 1000:1000 /mnt/POOL/apps/tandoor-claude/data && chmod 700 /mnt/POOL/apps/tandoor-claude/data
+   chown -R 568:568 /mnt/POOL/apps/tandoor-claude/data
    ```
 6. Fill in the YAML as in step 3.3, but with the values from your `.env`: the **same** `JWT_SIGNING_KEY`, OIDC client and `PUBLIC_BASE_URL`. Then install the app (step 3.4).
 7. Repoint nginx ([Setup step 4](#4-nginx)), then run the [Checks](#checks).
@@ -175,7 +175,7 @@ Tandoor stores "on hand" as a **yes/no flag per food**, with no quantities or fr
 
 ## Deploy
 
-On every push to `main` that changes more than Markdown files, [the publish workflow](.github/workflows/publish.yml) runs the unit tests. Then, if the image's inputs changed since the workflow's last successful push run, it builds the image and pushes it to the GitHub Container Registry as `ghcr.io/etiennex9/tandoor-claude-gateway`, tagged `latest` and `sha-<commit>`. The inputs are read from [gateway/Dockerfile](gateway/Dockerfile): the Dockerfile and what it copies ([image-changed.sh](.github/scripts/image-changed.sh)). So a push that only changes tests, docs, nginx or deploy files doesn't publish a new image. A manual run (**Actions → Publish → Run workflow**), or a change to the workflow, always builds. On a branch other than `main`, a manual run pushes only `sha-<commit>`. Pull requests run the tests, and build the image without pushing it when its inputs changed. If a run fails or is canceled, the next run picks up its changes. A Markdown-only push doesn't start a run, though, so use a manual run if you don't have another push coming.
+On every push to `main` that changes more than Markdown files, [the publish workflow](.github/workflows/publish.yml) runs the unit tests. Then, if the image's inputs changed since the workflow's last successful push run, it builds the image and pushes it to the GitHub Container Registry as `ghcr.io/etiennex9/tandoor-claude-gateway`, tagged `latest` and `sha-<commit>`. The inputs are read from [gateway/Dockerfile](gateway/Dockerfile): the Dockerfile and what it copies ([image-changed.sh](.github/scripts/image-changed.sh)). So a push that only changes tests, docs, nginx or deploy files doesn't publish a new image. A manual run (**Actions → Publish → Run workflow**), or a change to the workflow or its scripts in `.github/scripts/`, always builds. On a branch other than `main`, a manual run pushes only `sha-<commit>`. Before any push, [smoke-test.sh](.github/scripts/smoke-test.sh) starts the image against a mock Authentik, as `568:568` (TrueNAS) and as `node` with a new volume (compose), where it must answer `/healthz`, and as `568:568` with a root-owned `/data`, where it must stop with the entrypoint's message; if any of these fails, nothing is pushed. Pull requests run the tests, and build and smoke-test the image without pushing it when its inputs changed. If a run fails or is canceled, the next run picks up its changes. A Markdown-only push doesn't start a run, though, so use a manual run if you don't have another push coming.
 
 To roll out a new image, open **Apps** in TrueNAS and update the `tandoor-claude` app. It runs `latest`.
 

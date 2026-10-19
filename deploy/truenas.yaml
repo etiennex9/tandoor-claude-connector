@@ -3,9 +3,9 @@
 # Before pasting, replace:
 #   - recipe.example.com and login.example.com with your Tandoor and Authentik hosts (twice for recipe.example.com).
 #   - every CHANGE_ME_... (README → Setup says where each comes from). JWT_SIGNING_KEY: openssl rand -hex 32.
-#   - POOL in the host path, and create it first: its own dataset with the Generic preset (POSIX permissions), owned by
-#     1000:1000 (the image's node user), mode 700. It holds Claude's client registrations and the encrypted Authentik
-#     refresh tokens.
+#   - POOL in the host path, and create it first: its own dataset with the Generic preset, owned by apps:apps (568:568),
+#     the user the gateway runs as (README → Setup step 3.1). It holds Claude's client registrations and the encrypted
+#     Authentik refresh tokens.
 #   - 30181, if that port is taken. Point nginx's two gateway locations (nginx/claude-gateway.conf) at
 #     http://<NAS address>:30181.
 #
@@ -20,6 +20,8 @@
 services:
   gateway:
     image: ghcr.io/etiennex9/tandoor-claude-gateway:latest
+    # TrueNAS's built-in apps user and group, which must own the data dataset.
+    user: "568:568"
     environment:
       PUBLIC_BASE_URL: https://recipe.example.com/claude
       OIDC_CONFIG_URL: https://login.example.com/application/o/claude-tandoor/.well-known/openid-configuration
