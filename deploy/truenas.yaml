@@ -45,4 +45,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+      # Every 2s until the first success (or 30s), so the app shows as healthy right after it starts.
+      start_period: 30s
+      start_interval: 2s
     restart: unless-stopped
