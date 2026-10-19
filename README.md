@@ -133,6 +133,8 @@ Things to try:
 - "What can I make tonight with what's on hand?"
 - "Add milk to the shopping list."
 - "Import https://… and plan it for Friday dinner."
+- "Add my lentil soup recipe: …"
+- "Make the lasagna serve 6 and add basil to the sauce step."
 
 ## Checks
 
@@ -159,15 +161,21 @@ The tool list is built into the image: `DEFAULT_INCLUDE_ONLY` in [gateway/server
 
 | Area | Tools |
 |---|---|
-| Read | search/list/get recipes, related recipes, foods, ingredients, keywords, meal plans and types, shopping entries, cook log, units, version |
+| Read | search/list/get recipes, related recipes, recipe steps, foods, ingredients, keywords, nutrition property types, meal plans and types, shopping entries, cook log, units, version |
 | Pantry | `update_food`, `food_batch_update`, `create_food`, `food_shopping_update` (set or clear "on hand") |
 | Shopping list | create/update/delete entries, bulk check, add a recipe's ingredients |
 | Meal plan | create/update/delete entries |
-| Recipes | `import_recipe_from_url`, `create_cook_log` |
+| Recipes | `create_recipe`, `update_recipe`, `recipe_batch_update`, `upload_recipe_image` (from a URL), `import_recipe_from_url`, `create_cook_log` |
+| Steps and ingredients | `update_step`, `delete_step`, `update_ingredient`, `delete_ingredient` |
 
 Not exposed:
 - Deleting or merging recipes or foods.
-- Admin, API-token, invite, user, space, storage, AI-provider and import/export tools.
+- `create_step` and `create_ingredient`: they can't attach to a recipe. Claude adds steps through `update_recipe` and ingredients through `update_step`.
+- Admin, API-token, invite, user, space, storage, AI-provider and import/export tools, including Tandoor's AI import.
+
+Editing replaces whole lists: `update_recipe` with steps replaces all of the recipe's steps, and `update_step` with ingredients replaces all of that step's ingredients. To change one amount or unit, Claude uses `update_ingredient`.
+
+`upload_recipe_image` takes an image URL. The gateway sets `TANDOOR_MCP_UPLOAD_ROOT` to empty, so it reads no files inside the container.
 
 To change the default tool list, edit it, push to `main`, then update the app in TrueNAS (see [Deploy](#deploy)). With compose, run `docker compose up -d --build`.
 
