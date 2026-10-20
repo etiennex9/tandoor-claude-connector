@@ -11,7 +11,7 @@ TOOL_VARS = ("TANDOOR_MCP_PROFILE", "TANDOOR_MCP_INCLUDE_ONLY", "TANDOOR_MCP_EXC
 def tandoor(monkeypatch):
     monkeypatch.setenv("TANDOOR_URL", "https://recipe.example.com")
     monkeypatch.setenv("TANDOOR_TOKEN", "token")
-    for name in TOOL_VARS:
+    for name in (*TOOL_VARS, "TANDOOR_MCP_UPLOAD_ROOT"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -49,6 +49,16 @@ def test_explicit_values_are_kept(monkeypatch):
     assert env["TANDOOR_MCP_PROFILE"] == "basic"
     assert env["TANDOOR_MCP_INCLUDE_ONLY"] == "get_version, search_recipes"
     assert env["TANDOOR_MCP_EXCLUDE"] == "merge_*"
+
+
+def test_local_image_uploads_are_denied_by_default():
+    # Empty, not unset: unset lets upload_recipe_image read ~/Documents and the temp dir.
+    assert tandoor_env()["TANDOOR_MCP_UPLOAD_ROOT"] == ""
+
+
+def test_explicit_upload_root_is_kept(monkeypatch):
+    monkeypatch.setenv("TANDOOR_MCP_UPLOAD_ROOT", "/data/uploads")
+    assert tandoor_env()["TANDOOR_MCP_UPLOAD_ROOT"] == "/data/uploads"
 
 
 def test_transport_is_always_stdio(monkeypatch):

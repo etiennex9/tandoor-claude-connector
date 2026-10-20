@@ -136,6 +136,8 @@ Things to try:
 - "Add milk to the shopping list."
 - Share a photo, screenshot or PDF of a recipe: "Add this to Tandoor, with the photo as its image." Or start from the connector's `import_recipe_from_photo` prompt in the **+** menu.
 - "Import https://… and plan it for Friday dinner."
+- "Add my lentil soup recipe: …"
+- "Make the lasagna serve 6 and add basil to the sauce step."
 
 ## Checks
 
@@ -167,16 +169,22 @@ The tool list is built into the image: `DEFAULT_INCLUDE_ONLY` in [gateway/server
 
 | Area | Tools |
 |---|---|
-| Read | search/list/get recipes, related recipes, foods, ingredients, keywords, meal plans and types, shopping entries, cook log, units, version |
+| Read | search/list/get recipes, related recipes, recipe steps, foods, ingredients, keywords, nutrition property types, meal plans and types, shopping entries, cook log, units, version |
 | Pantry | `update_food`, `food_batch_update`, `create_food`, `food_shopping_update` (set or clear "on hand") |
 | Shopping list | create/update/delete entries, bulk check, add a recipe's ingredients |
 | Meal plan | create/update/delete entries |
-| Recipes | `import_recipe_from_url`, `create_cook_log` |
+| Recipes | `create_recipe`, `update_recipe`, `recipe_batch_update`, `upload_recipe_image` (from a URL), `import_recipe_from_url`, `create_cook_log` |
+| Steps and ingredients | `update_step`, `delete_step`, `update_ingredient`, `delete_ingredient` |
 | Recipe photos | `create_image_upload_link` (gateway-side): a one-time link for setting a recipe's image; the `import_recipe_from_photo` prompt |
 
 Not exposed:
 - Deleting or merging recipes or foods.
-- Admin, API-token, invite, user, space, storage, AI-provider and import/export tools.
+- `create_step` and `create_ingredient`: they can't attach to a recipe. Claude adds steps through `update_recipe` and ingredients through `update_step`.
+- Admin, API-token, invite, user, space, storage, AI-provider and import/export tools, including Tandoor's AI import.
+
+Editing replaces whole lists: `update_recipe` with steps replaces all of the recipe's steps, and `update_step` with ingredients replaces all of that step's ingredients. To change one amount or unit, Claude uses `update_ingredient`.
+
+`upload_recipe_image` takes an image URL. The gateway sets `TANDOOR_MCP_UPLOAD_ROOT` to empty, so it reads no files inside the container.
 
 To change the default tool list, edit it, push to `main`, then update the app in TrueNAS (see [Deploy](#deploy)). With compose, run `docker compose up -d --build`.
 
@@ -198,7 +206,15 @@ The tool and prompt are served by the gateway, not tandoor-recipes-mcp, so `TAND
 
 On every push to `main` that changes more than Markdown files, [the publish workflow](.github/workflows/publish.yml) runs the unit tests. Then, if the image's inputs changed since the workflow's last successful push run, it builds the image and pushes it to the GitHub Container Registry as `ghcr.io/etiennex9/tandoor-claude-gateway`, tagged `latest` and `sha-<commit>`. The inputs are read from [gateway/Dockerfile](gateway/Dockerfile): the Dockerfile and what it copies ([image-changed.sh](.github/scripts/image-changed.sh)). So a push that only changes tests, docs, nginx or deploy files doesn't publish a new image. A manual run (**Actions → Publish → Run workflow**), or a change to the workflow or its scripts in `.github/scripts/`, always builds. On a branch other than `main`, a manual run pushes only `sha-<commit>`. Before any push, [smoke-test.sh](.github/scripts/smoke-test.sh) starts the image against a mock Authentik, as `568:568` (TrueNAS) and as `node` with a new volume (compose), where it must answer `/healthz`, and as `568:568` with a root-owned `/data`, where it must stop with the entrypoint's message; if any of these fails, nothing is pushed. Pull requests run the tests, and build and smoke-test the image without pushing it when its inputs changed. If a run fails or is canceled, the next run picks up its changes. A Markdown-only push doesn't start a run, though, so use a manual run if you don't have another push coming.
 
-To roll out a new image, open **Apps** in TrueNAS and update the `tandoor-claude` app. It runs `latest`.
+To roll out a new image, open **Apps** in TrueNAS and update the `tandoor-claude` app. It runs `latest`. TrueNAS offers the update once a day after a publish.
+
+To roll out each publish automatically instead, within about 10 minutes, use the cron job from Essence's [truenas-autodeploy.py](https://github.com/etiennex9/essence/blob/main/deploy/truenas-autodeploy.py) (Essence's README → Deploy → *Rolling out each push automatically* has the steps; written for TrueNAS 25.10). Every 5 minutes it compares the digest `latest` points to on GHCR with the image the app runs; when they differ, it waits 2 minutes for the publish to settle, snapshots the data dataset, pulls and redeploys the app (what **Update** does), waits until the gateway's healthcheck passes, and checks that it doesn't restart in the 2 minutes after. It mails only failures, or every rollout too, depending on the cron job's **Hide Standard Output**. Nothing reaches the NAS from outside. For this app, check the setup with `--check` first, then use this as the cron job's command:
+
+```sh
+python3 /mnt/POOL/scripts/truenas-autodeploy.py tandoor-claude --snapshot POOL/apps/tandoor-claude/data
+```
+
+A failed rollout isn't retried until the next publish. If the pull failed, `rm /mnt/POOL/scripts/.autodeploy-tandoor-claude.json` retries it; if the gateway failed after the redeploy, it already has the new image: fix the cause, then **Stop** and **Start** the app, or push a fix. To hold the gateway at a version, set its image to a `:sha-<commit>` tag listed on the package page in the app's YAML; the script leaves sha tags alone.
 
 The package is public, like the repository, so TrueNAS pulls it without a login. If a pull is ever denied, open the package from the repository's **Packages** list and check **Package settings → Change visibility**.
 

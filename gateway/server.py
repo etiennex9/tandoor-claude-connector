@@ -87,7 +87,9 @@ DEFAULT_INCLUDE_ONLY = (
     "get_version", "search_recipes", "list_recipes", "list_recipes_flat", "get_recipe", "related_recipes",
     "list_foods", "get_food", "list_ingredients", "parse_ingredient", "list_keywords", "get_keyword",
     "list_meal_plans", "get_meal_plan", "list_meal_types", "list_shopping_entries", "get_shopping_entry",
-    "list_cook_logs", "list_units",
+    "list_cook_logs", "list_units", "list_steps", "list_property_types",
+    "create_recipe", "update_recipe", "recipe_batch_update", "upload_recipe_image",
+    "update_step", "delete_step", "update_ingredient", "delete_ingredient",
     "update_food", "food_batch_update", "create_food", "food_shopping_update",
     "create_shopping_entry", "update_shopping_entry", "delete_shopping_entry",
     "bulk_check_shopping_entries", "add_recipe_to_shopping_list",
@@ -128,6 +130,9 @@ def tandoor_env() -> dict[str, str]:
     for key, default in defaults.items():
         if is_blank(env.get(key)):
             env[key] = default
+    # Unset means ~/Downloads, ~/Pictures, ~/Documents and the temp dir; empty means
+    # upload_recipe_image may read no local file. Claude can't put files here anyway.
+    env.setdefault("TANDOOR_MCP_UPLOAD_ROOT", "")
     return env
 
 

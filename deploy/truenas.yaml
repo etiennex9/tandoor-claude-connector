@@ -14,7 +14,8 @@
 # port: firewall it, or bind it to an address only nginx can reach ("<address>:30181:8000").
 #
 # The image comes from the GitHub Container Registry, published by .github/workflows/publish.yml on pushes to main. Its
-# package is public, so no registry login is needed.
+# package is public, so no registry login is needed. TrueNAS offers Update once a day after a publish; README → Deploy
+# has a cron job that rolls out each publish within about 10 minutes instead.
 # The tool lists are built into the image (gateway/server.py); TANDOOR_MCP_INCLUDE_ONLY / TANDOOR_MCP_EXCLUDE override them.
 
 services:
