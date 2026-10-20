@@ -18,6 +18,8 @@ from fastmcp.server.providers.proxy import ProxyClient
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
+from photo_import import Tandoor, add_photo_import
+
 logger = logging.getLogger("tandoor_gateway")
 
 
@@ -172,6 +174,12 @@ def build_app():
     )
 
     mcp = create_proxy(backend, name="Tandoor Recipes", auth=auth)
+    # Gateway-side: the photo-import prompt and the upload link for a recipe's image.
+    add_photo_import(
+        mcp,
+        tandoor=Tandoor(require_env("TANDOOR_URL"), require_env("TANDOOR_TOKEN")),
+        public_base_url=public_base_url,
+    )
 
     @mcp.custom_route("/healthz", methods=["GET"])
     async def healthz(request: Request) -> PlainTextResponse:
