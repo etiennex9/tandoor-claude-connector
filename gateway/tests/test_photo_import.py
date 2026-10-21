@@ -161,7 +161,7 @@ def test_proxy_serves_gateway_tools_next_to_the_childs(tandoor, clock):
         return tools, prompts, version.data
 
     tools, prompts, version = run(check())
-    assert {"get_version", "create_image_upload_link"} <= tools
+    assert {"get_version", "create_image_upload_link", "save_recipe_from_photo"} <= tools
     assert "import_recipe_from_photo" in prompts
     assert version == "2.0.1"
 
@@ -229,7 +229,7 @@ def test_photo_prompt(server):
             return await client.get_prompt("import_recipe_from_photo")
 
     text = run(get()).messages[0].content.text
-    for phrase in ("create_recipe", "create_image_upload_link", "don't use Tandoor's AI import", "Don't guess"):
+    for phrase in ("save_recipe_from_photo", "upload link", "don't use Tandoor's AI import", "Don't guess"):
         assert phrase in text
 
 
