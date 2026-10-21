@@ -7,6 +7,8 @@ stdio, which calls Tandoor with a single API token.
 
 import logging
 import os
+import re
+from fnmatch import fnmatchcase
 from urllib.parse import urlsplit
 
 from fastmcp.client.transports import StdioTransport
@@ -14,11 +16,13 @@ from fastmcp.server import create_proxy
 from fastmcp.server.auth import AccessToken
 from fastmcp.server.auth.oidc_proxy import OIDCProxy
 from fastmcp.server.auth.providers.jwt import JWTVerifier
+from fastmcp.server.middleware import Middleware
 from fastmcp.server.providers.proxy import ProxyClient
+from fastmcp.server.transforms import Transform
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 
-from photo_import import Tandoor, add_photo_import
+from photo_import import PHOTO_INSTRUCTIONS, Tandoor, add_photo_import
 
 logger = logging.getLogger("tandoor_gateway")
 
@@ -136,6 +140,123 @@ def tandoor_env() -> dict[str, str]:
     return env
 
 
+def child_hides(env: dict[str, str], tool: str) -> bool:
+    """True when the child's tool lists in env keep it from registering tool (the child matches * globs too)."""
+
+    def listed(name: str) -> bool:
+        return any(fnmatchcase(tool, p.strip()) for p in env.get(name, "").split(",") if p.strip())
+
+    included = is_blank(env.get("TANDOOR_MCP_INCLUDE_ONLY")) or listed("TANDOOR_MCP_INCLUDE_ONLY")
+    return not included or listed("TANDOOR_MCP_EXCLUDE")
+
+
+# tandoor-recipes-mcp 2.0.1 text that sends Claude to tools the gateway hides, or past save_recipe_from_photo. Each
+# edit applies while the tool it names last is hidden (always for None), and is skipped with a warning once the
+# child's text changes.
+INSTRUCTION_EDITS = (
+    # The child stashes large results only when jq_query is registered.
+    (re.compile(r"Large results: .*?TANDOOR_MCP_STASH_ENABLED=0 to disable this behavior\.\n\n", re.S), "", "jq_query"),
+    (
+        re.compile(re.escape("cook logs, nutrition, and AI-assisted imports.")),
+        "cook logs and nutrition.",
+        "import_recipe_from_image",
+    ),
+)
+
+DESCRIPTION_EDITS = (
+    (
+        "import_recipe_from_url",
+        "(2) if the page is an image/PDF, use import_recipe_from_image (AI provider required);",
+        "(2) if the page is an image or PDF, ask the user to share it in the chat, then read it and save it with "
+        "save_recipe_from_photo;",
+        "import_recipe_from_image",
+    ),
+    (
+        "parse_ingredient",
+        " If the result looks wrong or unit/food come back null, recommend: construct the ingredient directly via "
+        "create_ingredient with explicit food_id (via find_or_create on the food name) and unit_id. That path is "
+        "deterministic.",
+        " If the result looks wrong or unit/food come back null, set the food, amount, unit and note yourself.",
+        "create_ingredient",
+    ),
+    (
+        "create_recipe",
+        "Optional: description, servings, working_time, waiting_time, keywords[]",
+        "Optional: description, servings, working_time, waiting_time, keywords[]. For a recipe read from a photo, "
+        "screenshot or PDF, use save_recipe_from_photo instead: it keeps step names and ingredients without an amount.",
+        None,
+    ),
+)
+
+
+def edit_applies(env: dict[str, str], hidden_tool: str | None) -> bool:
+    return hidden_tool is None or child_hides(env, hidden_tool)
+
+
+class ChildInstructions(Middleware):
+    """Edits the child's server instructions, which the proxy forwards to Claude, and adds the gateway's own.
+
+    Passed to create_proxy(middleware=...) so that it runs outside the proxy's own middleware, which merges the child's
+    instructions into the result. Instructions set on the gateway would replace the child's instead.
+    """
+
+    def __init__(self, env: dict[str, str]):
+        self._edits = [(pattern, new) for pattern, new, tool in INSTRUCTION_EDITS if edit_applies(env, tool)]
+        self._warned: set[str] = set()
+
+    def edit(self, instructions: str | None) -> str:
+        text = instructions or ""
+        for pattern, new in self._edits:
+            text, count = pattern.subn(new, text, count=1)
+            if not count and instructions and pattern.pattern not in self._warned:
+                self._warned.add(pattern.pattern)
+                logger.warning("The child's instructions changed; not edited: %s", pattern.pattern)
+        return f"{text.rstrip()}\n\n{PHOTO_INSTRUCTIONS}" if text.strip() else PHOTO_INSTRUCTIONS
+
+    async def on_initialize(self, context, call_next):
+        result = await call_next(context)
+        return None if result is None else result.model_copy(update={"instructions": self.edit(result.instructions)})
+
+    async def on_discover(self, context, call_next):
+        result = await call_next(context)
+        if isinstance(result, dict):  # not a DiscoverResult, which the proxy passes on as it is
+            return result
+        return result.model_copy(update={"instructions": self.edit(result.instructions)})
+
+
+class ChildDescriptions(Transform):
+    """Edits some of the child's tool descriptions. ToolTransformConfig would also rebuild their input schemas."""
+
+    def __init__(self, env: dict[str, str]):
+        self._edits = {name: (old, new) for name, old, new, tool in DESCRIPTION_EDITS if edit_applies(env, tool)}
+        self._warned: set[str] = set()
+
+    def edit(self, tool):
+        if tool.name not in self._edits:
+            return tool
+        old, new = self._edits[tool.name]
+        if old not in (tool.description or ""):
+            if tool.name not in self._warned:
+                self._warned.add(tool.name)
+                logger.warning("The description of the child's %s changed; not edited", tool.name)
+            return tool
+        return tool.model_copy(update={"description": tool.description.replace(old, new)})
+
+    async def list_tools(self, tools):
+        return [self.edit(tool) for tool in tools]
+
+    async def get_tool(self, name, call_next, *, version=None):
+        tool = await call_next(name, version=version)
+        return None if tool is None else self.edit(tool)
+
+
+def gateway_proxy(backend: ProxyClient, child_env: dict[str, str], **settings):
+    """The proxy in front of the child, with the child's text edited."""
+    mcp = create_proxy(backend, name="Tandoor Recipes", middleware=[ChildInstructions(child_env)], **settings)
+    mcp.add_transform(ChildDescriptions(child_env))
+    return mcp
+
+
 def build_app():
     """App factory for `uvicorn server:build_app --factory`."""
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
@@ -162,19 +283,20 @@ def build_app():
         extra_authorize_params={"scope": "openid email profile offline_access"},
     )
 
+    child_env = tandoor_env()
     backend = ProxyClient(
         # keep_alive: one tandoor-recipes-mcp process serves every request and
         # is restarted automatically if it exits.
         StdioTransport(
             command="tandoor-recipes-mcp",
             args=[],
-            env=tandoor_env(),
+            env=child_env,
             keep_alive=True,
         ),
     )
 
-    mcp = create_proxy(backend, name="Tandoor Recipes", auth=auth)
-    # Gateway-side: the photo-import prompt and the upload link for a recipe's image.
+    mcp = gateway_proxy(backend, child_env, auth=auth)
+    # Gateway-side: the photo-import prompt, save_recipe_from_photo and the upload link for a recipe's image.
     add_photo_import(
         mcp,
         tandoor=Tandoor(require_env("TANDOOR_URL"), require_env("TANDOOR_TOKEN")),

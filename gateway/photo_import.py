@@ -349,6 +349,13 @@ SAVE_TOOL_DESCRIPTION = (
     "to replace or fill in that recipe. Returns the recipe's id and a one-time link for uploading its image."
 )
 
+# Added to the child's server instructions (server.py).
+PHOTO_INSTRUCTIONS = (
+    "Recipes from photos: read a recipe photo, screenshot or PDF yourself and save it with `save_recipe_from_photo`,\n"
+    "which also returns a link for attaching the dish photo. With `recipe_id` it fills in or replaces a recipe. For a\n"
+    "screenshot of a web page whose URL you can read, offer `import_recipe_from_url` instead."
+)
+
 UPLOAD_TOOL_DESCRIPTION = """\
 Get a one-time link for attaching a photo to a recipe as its image (JPEG, PNG or WebP, up to 10 MB). Tool calls can't \
 carry a photo from the chat, so give the link to the user: they open it on the device that has the photo and choose \

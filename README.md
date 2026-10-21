@@ -184,6 +184,8 @@ Not exposed:
 
 Editing replaces whole lists: `update_recipe` with steps replaces all of the recipe's steps, and `update_step` with ingredients replaces all of that step's ingredients. To change one amount or unit, Claude uses `update_ingredient`. Tandoor (2.6) unlinks the replaced steps and ingredients rather than deleting them, as its own recipe editor does, so they stay in its database where nothing shows them.
 
+A few of tandoor-recipes-mcp's texts mention tools the gateway hides, so the gateway edits them on their way to Claude ([gateway/server.py](gateway/server.py)). Its server instructions lose the paragraph about stashed large results, which only happens when `jq_query` is exposed, and the mention of AI imports. The descriptions of `import_recipe_from_url` and `parse_ingredient` stop recommending `import_recipe_from_image` and `create_ingredient`, and `create_recipe`'s points photos to `save_recipe_from_photo`. An edit is dropped when your `TANDOOR_MCP_INCLUDE_ONLY` exposes the tool it removes, and skipped with a warning in the log when a new tandoor-recipes-mcp version changes the text.
+
 `upload_recipe_image` takes an image URL. The gateway sets `TANDOOR_MCP_UPLOAD_ROOT` to empty, so it reads no files inside the container.
 
 To change the default tool list, edit it, push to `main`, then update the app in TrueNAS (see [Deploy](#deploy)). With compose, run `docker compose up -d --build`.
