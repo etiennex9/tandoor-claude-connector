@@ -134,7 +134,7 @@ Things to try:
 - "What's on hand?"
 - "What can I make tonight with what's on hand?"
 - "Add milk to the shopping list."
-- Share a photo, screenshot or PDF of a recipe: "Add this to Tandoor, with the photo as its image." Or start from the connector's `import_recipe_from_photo` prompt in the **+** menu.
+- Share a photo, screenshot or PDF of a recipe: "Add this to Tandoor, with the photo as its image." Or start from the connector's `import_recipe_from_photo` prompt in the **+** menu. For both sides of a card, share both photos.
 - "Import https://… and plan it for Friday dinner."
 - "Add my lentil soup recipe: …"
 - "Make the lasagna serve 6 and add basil to the sauce step."
@@ -175,14 +175,14 @@ The tool list is built into the image: `DEFAULT_INCLUDE_ONLY` in [gateway/server
 | Meal plan | create/update/delete entries |
 | Recipes | `create_recipe`, `update_recipe`, `recipe_batch_update`, `upload_recipe_image` (from a URL), `import_recipe_from_url`, `create_cook_log` |
 | Steps and ingredients | `update_step`, `delete_step`, `update_ingredient`, `delete_ingredient` |
-| Recipe photos | `create_image_upload_link` (gateway-side): a one-time link for setting a recipe's image; the `import_recipe_from_photo` prompt |
+| Recipe photos | `save_recipe_from_photo` and `create_image_upload_link` (gateway-side): save a recipe Claude read from a photo, and a one-time link for setting a recipe's image; the `import_recipe_from_photo` prompt |
 
 Not exposed:
 - Deleting or merging recipes or foods.
 - `create_step` and `create_ingredient`: they can't attach to a recipe. Claude adds steps through `update_recipe` and ingredients through `update_step`.
 - Admin, API-token, invite, user, space, storage, AI-provider and import/export tools, including Tandoor's AI import.
 
-Editing replaces whole lists: `update_recipe` with steps replaces all of the recipe's steps, and `update_step` with ingredients replaces all of that step's ingredients. To change one amount or unit, Claude uses `update_ingredient`.
+Editing replaces whole lists: `update_recipe` with steps replaces all of the recipe's steps, and `update_step` with ingredients replaces all of that step's ingredients. To change one amount or unit, Claude uses `update_ingredient`. Tandoor (2.6) unlinks the replaced steps and ingredients rather than deleting them, as its own recipe editor does, so they stay in its database where nothing shows them.
 
 `upload_recipe_image` takes an image URL. The gateway sets `TANDOOR_MCP_UPLOAD_ROOT` to empty, so it reads no files inside the container.
 
@@ -192,15 +192,23 @@ Tandoor stores "on hand" as a **yes/no flag per food**, with no quantities or fr
 
 ### Recipes from photos
 
-Share a photo, screenshot or PDF of a recipe and ask Claude to add it. Claude reads it itself and creates the recipe with `create_recipe`, which takes foods, units and keywords by name and finds or creates them in Tandoor. Tandoor's AI import and AI provider aren't involved. The `import_recipe_from_photo` prompt tells Claude how to transcribe: keep amounts and units as written, put each ingredient in the step that uses it, and ask about anything illegible instead of guessing. `create_recipe` has no ingredient headers, so sections such as "For the sauce" become steps of their own, and an ingredient without an amount ("salt to taste") gets 0, with the rest in its note.
+Share a photo, screenshot or PDF of a recipe and ask Claude to add it. Claude reads it itself and saves it with the gateway's `save_recipe_from_photo`. Tandoor's AI import and AI provider aren't involved. The tool's description tells Claude how to transcribe, so it applies even when you don't start from the `import_recipe_from_photo` prompt, which carries the same rules:
+- Steps are rewritten concisely in the recipe's language, keeping every action, amount, time and temperature, and each step is named after its heading.
+- Amounts and units stay as written. Each ingredient goes in the step that uses it, split by share when several steps use it, including pantry items such as oil, salt and pepper, so they scale and reach the shopping list.
+- Foods get short singular names. Servings are the base yield ("2 ou 4 portions" gives 2). The description sums up the introduction, then gives calories, allergens and source.
+- Claude asks about anything illegible instead of guessing. For a screenshot of a web page whose URL it can read, it offers `import_recipe_from_url` instead.
 
-Setting the photo as the recipe's image takes one more tap. A tool call can't carry a photo from the chat, and `upload_recipe_image` only takes a public URL, so the gateway adds its own tool, `create_image_upload_link`. Claude gets a link such as `https://recipe.example.com/claude/upload/<token>` and gives it to you. Open it on the device that has the photo and choose the photo; the gateway checks it and sets it as the recipe's image, replacing any image the recipe had.
+The gateway writes the recipe to Tandoor itself, with what `create_recipe` can't store: step names, ingredients without an amount ("au goût"), and sub-headings in an ingredient list ("Pour la sauce"). Tandoor finds or creates foods and keywords by name, ignoring case. Units written differently from an existing one ("c. à s." for "c. à soupe", "Tasses" for "tasse") use the existing unit. A French unit the space doesn't have yet gets a base unit so that Tandoor can convert it (tasse: US cup, c. à soupe: tbsp, c. à thé: tsp). Units already in Tandoor are left as they are: set their base unit on Tandoor's Units page.
+
+Tandoor allows two recipes with the same name, so the tool refuses one and Claude asks you whether to replace the existing recipe or keep both. With `recipe_id`, for example for an empty recipe waiting for its card, the tool replaces the recipe's steps and the fields Claude gives. The fields it leaves out keep their value, and so does the image.
+
+Setting the photo as the recipe's image takes one more tap. A tool call can't carry a photo from the chat, and `upload_recipe_image` only takes a public URL, so `save_recipe_from_photo` returns a link, and `create_image_upload_link` gets one for any recipe. Claude gets a link such as `https://recipe.example.com/claude/upload/<token>` and gives it to you. Open it on the device that has the photo and choose the photo; the gateway checks it and sets it as the recipe's image, replacing any image the recipe had.
 - Each link is for one recipe and one upload, and expires after 30 minutes. The gateway keeps links in memory, so a restart expires them too.
 - It takes a JPEG, PNG or WebP of up to 10 MB, checked by its content. iPhones convert HEIC photos to JPEG when you choose them.
 - The link itself is the credential: opening it needs no sign-in, so share it only with whoever should set the image.
 - If Claude can run code that reaches your host (code execution with network access in Claude's settings), it can upload the image itself, such as a crop of the dish. That depends on your Claude plan and settings, and hasn't been tried here.
 
-The tool and prompt are served by the gateway, not tandoor-recipes-mcp, so `TANDOOR_MCP_INCLUDE_ONLY` doesn't hide them.
+The tools and prompt are served by the gateway, not tandoor-recipes-mcp, so `TANDOOR_MCP_INCLUDE_ONLY` doesn't hide them.
 
 ## Deploy
 

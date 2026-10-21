@@ -1,0 +1,66 @@
+{
+  "_note": "save_recipe_from_photo arguments for a two-sided Goodfood card, as Claude transcribed it on 2026-10-19: the foods, amounts, units and notes per step, and the card's step headings. The instructions are placeholders, not the card's text. Units are as printed on the card (c. à s., Gousses, Branches).",
+  "arguments": {
+    "name": "Poulet collant miel et ail à la friteuse à air",
+    "description": "Source : carte Goodfood. Environ 810-820 kcal par portion. Allergènes : sésame, soya, sulfites, blé.",
+    "servings": 2,
+    "servings_text": "portions",
+    "working_time": 20,
+    "keywords": ["Poulet", "Friteuse à air", "Goodfood"],
+    "steps": [
+      {
+        "name": "Cuire le riz",
+        "instruction": "Instruction de test 1.",
+        "time": 16,
+        "ingredients": [
+          {"food": "riz au jasmin", "amount": 160, "unit": "g"},
+          {"food": "eau", "amount": 1.5, "unit": "tasse"},
+          {"food": "sel", "amount": 1, "unit": "pincée", "note": "grosse"},
+          {"food": "huile", "note": "pour huiler le panier"}
+        ]
+      },
+      {
+        "name": "Faire la sauce et frire le poulet",
+        "instruction": "Instruction de test 2 (74 °C).",
+        "time": 15,
+        "ingredients": [
+          {"food": "ail", "amount": 3, "unit": "Gousses"},
+          {"food": "sauce ponzu à la lime", "amount": 30, "unit": "ml"},
+          {"food": "miel", "amount": 21, "unit": "g", "note": "¾ du miel"},
+          {"food": "hauts de cuisses de poulet", "amount": 4, "note": "ou 2 poitrines de poulet"},
+          {
+            "food": "épices sésame doux",
+            "amount": 12,
+            "unit": "g",
+            "note": "mélange : cassonade, sel de mer, sésame blanc, ail, gingembre, poivre noir"
+          }
+        ]
+      },
+      {
+        "name": "Mise en place",
+        "instruction": "Instruction de test 3.",
+        "ingredients": [
+          {"food": "oignons verts", "amount": 2},
+          {"food": "céleri", "amount": 3, "unit": "Branches"},
+          {"food": "pomme", "amount": 1}
+        ]
+      },
+      {
+        "name": "Faire la salade de chou",
+        "instruction": "Instruction de test 4.",
+        "ingredients": [
+          {"food": "vinaigre de riz", "amount": 30, "unit": "ml"},
+          {"food": "miel", "amount": 7, "unit": "g", "note": "le reste"},
+          {"food": "huile", "amount": 2, "unit": "c. à s."},
+          {"food": "sel", "note": "au goût"},
+          {"food": "poivre", "note": "au goût"}
+        ]
+      },
+      {
+        "name": "Dresser les plats",
+        "instruction": "Instruction de test 5.",
+        "ingredients": []
+      }
+    ]
+  }
+}
